@@ -4,3 +4,4 @@ War_and_Peace.txt
 *.jpg
 #.jpeg
 *.pyc
+.vscode
