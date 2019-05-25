@@ -2,6 +2,6 @@ War_and_Peace.txt
 *.png
 *.gif
 *.jpg
-#.jpeg
+*.jpeg
 *.pyc
-.vscode
+.vscode/
