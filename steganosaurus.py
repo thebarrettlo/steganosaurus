@@ -4,9 +4,11 @@
 # Steganosaurus encodes a message into an image file.
 #
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops
+from PIL.ExifTags import TAGS
 import random
 import steganoseed
+import steganomerge
 
 def encodeText(input_text, savekey):
     """Encodes user's text into an image file. Takes user's text and image to cover up the coded image."""
@@ -21,9 +23,19 @@ def encodeText(input_text, savekey):
     random.shuffle(ASCIIinput)
 
     # Initialize blank image for encoding
-    width = 400
-    height = 200
-    template = Image.new("RGBA", (width, height))
+    tempcover = Image.open("./testOverlay.png")
+    tempcover.load()
+    coverimg = Image.new("RGBA", tempcover.size, (255,255,255,0))
+    coverimg.paste(tempcover)
+    coverimgexif = coverimg.getexif()
+    imgdescription = []
+    for rgbtuple in list(coverimg.getdata()):
+        imgdescription.append(str(rgbtuple).replace(" ", ""))
+    coverimgexif[0x010e] = "".join(imgdescription)
+
+    width = coverimg.width
+    height = coverimg.height
+    template = Image.new("RGB", (width, height))
 
     # Change pixel colors
     draw = ImageDraw.Draw(template)
@@ -45,7 +57,9 @@ def encodeText(input_text, savekey):
     elif (len(ASCIIinput) % 3) == 2:
         draw.point([(x, y)], (ASCIIinput[i], ASCIIinput[i+1], 0))
     
-    template.save("exportImage.png")
+    # Conceal the text into the cover image
+    exportimg = steganomerge.merge(coverimg, template)
+    exportimg.save("exportImageTEST.png", exif=coverimgexif)
 
 
 def decodeText(input_image, savekey):
@@ -76,4 +90,7 @@ def decodeText(input_image, savekey):
     return "".join(decoded_text)
 
 
-#encodeText("Lorem ipsum dolor sit amet, amet accusam sea in, justo tation ut mel? Nostro utamur te nam, ex omnesque oportere nam. Vix ut summo audire consequuntur! Solet qualisque in sit! In vim posse forensibus, ut usu clita facete. Mel an omnis prima interesset, vel alii abhorreant et, et est reque paulo fastidii! No mel choro petentium vituperatoribus. Nec ut graece abhorreant. Ex ius modus homero honestatis, ne pri enim saepe oportere. Omnis perfecto mei id. Consul vituperata per eu? At dicam dolorem inciderint eum. Ut eos summo tamquam, qui no affert fuisset mnesarchum, pro id quot blandit! Rationibus quaerendum his ut, nostrud reformidans ullamcorper sea in, utinam fastidii reprimique ad nec.", "1d3#J%")
+encodeText("Lorem ipsum dolor sit amet, amet accusam sea in, justo tation ut mel? Nostro utamur te nam, ex omnesque oportere nam. Vix ut summo audire consequuntur! Solet qualisque in sit! In vim posse forensibus, ut usu clita facete. Mel an omnis prima interesset, vel alii abhorreant et, et est reque paulo fastidii! No mel choro petentium vituperatoribus. Nec ut graece abhorreant. Ex ius modus homero honestatis, ne pri enim saepe oportere. Omnis perfecto mei id. Consul vituperata per eu? At dicam dolorem inciderint eum. Ut eos summo tamquam, qui no affert fuisset mnesarchum, pro id quot blandit! Rationibus quaerendum his ut, nostrud reformidans ullamcorper sea in, utinam fastidii reprimique ad nec.", "1d3#J%")
+
+img = Image.open("exportImageTEST.png")
+print(len(img.getexif()[270]))

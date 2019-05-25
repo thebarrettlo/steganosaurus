@@ -29,7 +29,7 @@ def ASCIIshift(ascii_array, savekey):
 
     i = 0
     while i < len(ascii_array):
-        ascii_array[i] = (ascii_array[i] + key) % 255
+        ascii_array[i] = (ascii_array[i] + key) % 256
         i += 1
 
     return ascii_array
@@ -42,7 +42,7 @@ def deASCIIshift(ascii_array, savekey):
 
     i = 0
     while i < len(ascii_array):
-        ascii_array[i] = (ascii_array[i] - key)
+        ascii_array[i] = (ascii_array[i] - key) + 256
         i += 1
 
     return ascii_array
