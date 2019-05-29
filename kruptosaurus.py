@@ -1,4 +1,4 @@
-# Steganoseed generates int for random.seed() from a given save key.
+# Kruptosaurus generates int for random.seed() from a given save key.
 # Barrett Lo
 # 24 May, 2019
 #
@@ -25,7 +25,7 @@ def generate_key(savekey):
 def ASCIIshift(ascii_array, savekey):
     """ASCIIshift shifts all ASCII values in an array by an amount determined by the save key."""
 
-    key = sum([int(i) for i in list(str(generate_key(savekey)))])
+    key = sum([int(i) for i in list(str(generate_key(savekey)))]) + 100
 
     i = 0
     while i < len(ascii_array):
@@ -38,11 +38,11 @@ def ASCIIshift(ascii_array, savekey):
 def deASCIIshift(ascii_array, savekey):
     """ASCIIshift un-shifts all ASCII values in an array by an amount determined by the save key."""
 
-    key = sum([int(i) for i in list(str(generate_key(savekey)))])
+    key = sum([int(i) for i in list(str(generate_key(savekey)))]) + 100
 
     i = 0
     while i < len(ascii_array):
-        ascii_array[i] = (ascii_array[i] - key) + 256
+        ascii_array[i] = (ascii_array[i] - key) % 256
         i += 1
 
     return ascii_array
