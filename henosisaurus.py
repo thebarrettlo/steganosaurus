@@ -42,7 +42,7 @@ def merge(im1, im2): # !!! FIX WHEN 0 CHANGE TO 255 ALPHA LAYER
                 coverpixel += 1
                 pixelchannel = 0
         i += 1
-        
+
     i = 0
     for pix in coverrgba:   # Convert the cover image RGBA values back to tuples for image export
         coverrgba[i] = tuple(pix)
@@ -62,7 +62,7 @@ def demerge(im):
     # Get pixel data from images
     im.load()
     coverrgba = [list(pix) for pix in list(im.getdata())]
-    imgexif = _separatetorgba([int(a) for a in str(im.getexif()[270]).split(",")])
+    imgexif = _separatetorgba([int(a) for a in str(im.getexif()[37510]).split(",")])
     codedlist = []
     i = 0   # Counter for pixel channel pointer
     j = 0   # Channel pointer counter
@@ -96,6 +96,8 @@ def _separatetorgba(vals):
 
 def _combinetorgbtuple(vals):
     """_combinetorgbtuple() takes a list of integer values (single digits) and turns them into 3-value tuples within a list."""
+    
+    vals = vals + [0] * (9 - (len(vals) % 9))  # Ensures that there will be a full tuple to post
 
     i = 0
     out = []

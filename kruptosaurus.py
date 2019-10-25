@@ -17,7 +17,7 @@ def generate_key(savekey):
         i += 1
 
     # Mathematically manipulate save key values
-    keyval = int(((((keyarray[0] % keyarray[1]) % sum(keyarray[3:-1])) * math.exp(keyarray[2])) // keyarray[-1]))
+    keyval = int(((((keyarray[0] % keyarray[1]) * sum(keyarray[3:-1])) * math.exp(keyarray[2])) // keyarray[-1]))
 
     return keyval
 

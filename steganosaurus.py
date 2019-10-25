@@ -5,6 +5,7 @@
 #
 
 import sys
+import argparse
 from PIL import Image, ImageDraw, ImageChops
 from PIL.ExifTags import TAGS
 import random
@@ -24,7 +25,7 @@ def encodeText(input_text, savekey):
     kruptosaurus.ASCIIshift(ASCIIinput, key)
 
     # Initialize blank image for encoding
-    tempcover = Image.open("./testOverlay.png")
+    tempcover = Image.open("./testOverlay.jpg")
     tempcover.load()
     coverimg = Image.new("RGBA", tempcover.size, (255,255,255,0))
     coverimg.paste(tempcover)
@@ -32,7 +33,7 @@ def encodeText(input_text, savekey):
     imgdescription = []
     for rgbtuple in list(coverimg.getdata()):
         imgdescription.append(str(rgbtuple).replace(" ", "").replace("(", "").replace(")", ""))
-    coverimgexif[270] = ",".join(imgdescription)
+    coverimgexif[37510] = ",".join(imgdescription)
 
     width = coverimg.width
     height = coverimg.height
@@ -87,25 +88,39 @@ def decodeText(input_image, savekey):
             decoded_text[x] = chr(coded_text[i])
         textout.write("".join(decoded_text))
 
-    return textout
+    print("".join(decoded_text))
 
 
 def main():
     script = sys.argv[0]
-    action = sys.argv[1]
-    userinputs = sys.argv[2:]
-    assert action in ['-encode', '-decode'], \
-        "Action is not -encode or -decode: " + action
+    """inputs = []
+    parser = argparse.ArgumentParser(description='Encode/Decode text into/from an image, using a save key. ' +
+    'The save key must be at least 5 characters long and can be made up of uppercase and lowercase letters, ' +
+    'numbers, and special characters.')
+    parser.add_argument('text input', metavar='text', type=str, nargs='+', help='Text to be encoded.')
+    parser.add_argument('save key', metavar='key', type=open, help='Key to encrypt/decrypt message into image.')
+    parser.add_argument('--encode', '-e', dest='', action='store', help='Encode the given text into an image.')
+    parser.add_argument('--decode', '-d', dest='', action='store', help='Decode the text within in image.')
+    args = parser.parse_args('test', inputs)"""
+    try:
+        action = sys.argv[1]
+        userinputs = sys.argv[2:]
+        assert action in ['--encode', '--decode'], \
+            "Action is not --encode or --decode: " + action
 
-    process(userinputs, action)
+        process(userinputs, action)
+    except:
+        raise IOError("Proper input format is --encode or --decode followed by a string and then a save key. "
+            "The save key must be at least five characters long and can be made up of uppercase and lowercase "
+                "letters, numbers, and special characters.")
     
 def process(filename, action):
 
-    if action == "-encode":
-        return encodeText(filename[0], filename[1])
-    elif action == "-decode":
+    if action == '--encode':
+        return encodeText(" ".join(filename[0:-1]), filename[-1])
+    elif action == '--decode':
         return decodeText(filename[0], filename[1])
 
-
-encodeText("Lorem ipsum dolor sit amet, amet accusam sea in, justo tation ut mel? Nostro utamur te nam, ex omnesque oportere nam. Vix ut summo audire consequuntur! Solet qualisque in sit! In vim posse forensibus, ut usu clita facete. Mel an omnis prima interesset, vel alii abhorreant et, et est reque paulo fastidii! No mel choro petentium vituperatoribus. Nec ut graece abhorreant. Ex ius modus homero honestatis, ne pri enim saepe oportere. Omnis perfecto mei id. Consul vituperata per eu? At dicam dolorem inciderint eum. Ut eos summo tamquam, qui no affert fuisset mnesarchum, pro id quot blandit! Rationibus quaerendum his ut, nostrud reformidans ullamcorper sea in, utinam fastidii reprimique ad nec.", "1d3#J%")
-decodeText("./exported-image.png", "1d3#J%")
+#main()
+#encodeText("Hello. This is a test to see how this actually looks encoded. A straight line is certainly easier to implement, but random positioning might look more like random (natural) noise, which is more difficult to detect.", "abCD$5")
+decodeText("exported-image.png", "abCD$5")
