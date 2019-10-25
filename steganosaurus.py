@@ -8,66 +8,59 @@ import sys
 import argparse
 from PIL import Image, ImageDraw, ImageChops
 from PIL.ExifTags import TAGS
+import piexif
+import piexif.helper
 import random
 import kruptosaurus
 import henosisaurus
 
-def encodeText(input_text, savekey):
+def encodeText(imagePath, input_text, savekey):
     """Encodes user's text into an image file. Takes user's text and image to cover up the coded image."""
 
-    # Translate user input to ASCII values stored in a list
+    # 1. Translate user input to ASCII values stored in a list
     ASCIIinput = []
     for char in input_text:
         ASCIIinput.append(ord(char))
-    key = kruptosaurus.generate_key(savekey)
-    random.seed(kruptosaurus.generate_key(key))   # User-generated save key for decoding
-    random.shuffle(ASCIIinput)
-    kruptosaurus.ASCIIshift(ASCIIinput, key)
+    key = kruptosaurus.generate_key(savekey)    # Generate a key based on the user's save key
+    random.seed(kruptosaurus.generate_key(key))   # Seed with the user-generated save key
+    random.shuffle(ASCIIinput)  # Shuffle in user's message based upon their save key
+    kruptosaurus.ASCIIshift(ASCIIinput, key)    # Shift the shuffled message
+
+    # Get length of input and modify only that amount on the original picture
+    # (and therefore, save that amount from the original picture)
+
+    # Different paths for .jpg and .png
+    # .jpg should not involve the alpha layer
+    # .png should keep the original alpha layer
+    # in any case: don't touch the alpha layer!
 
     # Initialize blank image for encoding
-    tempcover = Image.open("./testOverlay.jpg")
-    tempcover.load()
-    coverimg = Image.new("RGBA", tempcover.size, (255,255,255,0))
-    coverimg.paste(tempcover)
-    coverimgexif = coverimg.getexif()   # Store original cover image data in Image Description metadata
+    input_image = Image.open(imagePath)
+    input_image.load()
+    input_image_exif = input_image.getexif()
+    # input_image_exif = piexif.load(input_image.info["exif"])
     imgdescription = []
-    for rgbtuple in list(coverimg.getdata()):
+    for rgbtuple in list(input_image.getdata()):
         imgdescription.append(str(rgbtuple).replace(" ", "").replace("(", "").replace(")", ""))
-    coverimgexif[37510] = ",".join(imgdescription)
+    user_comment = ",".join(imgdescription[0:len(ASCIIinput)])
+    input_image_exif[37510] = user_comment
+    input_image_exif[42034] = 0     # Handles Lens Specification error - Pillow not able to save this data.
 
-    width = coverimg.width
-    height = coverimg.height
-    template = Image.new("RGB", (width, height))
+    # Handle case where x and y resolutions are tuples
+    if len(input_image_exif[282]) > 1:
+        input_image_exif[282] = input_image_exif[282][0] / input_image_exif[282][1]
+    if len(input_image_exif[283]) > 1:
+        input_image_exif[283] = input_image_exif[283][0] / input_image_exif[283][1]
 
-    # Change pixel colors
-    draw = ImageDraw.Draw(template)
-    x = 0
-    y = 0
-    i = 0
-    while i < (len(ASCIIinput) - (len(ASCIIinput) % 3)):
-        draw.point([(x, y)], (ASCIIinput[i], ASCIIinput[i+1], ASCIIinput[i+2]))
-        i += 3
-        x += 1
-        if x >= width:
-            x = 0
-            y += 1
-            if y >= height:
-                raise IndexError("Message too tall!")
-    # End case for inputs not a multiple of 3
-    if (len(ASCIIinput) % 3) == 1:
-        draw.point([(x, y)], (ASCIIinput[i], 0, 0))
-    elif (len(ASCIIinput) % 3) == 2:
-        draw.point([(x, y)], (ASCIIinput[i], ASCIIinput[i+1], 0))
-    
     # Conceal the text into the cover image
-    exportimg = henosisaurus.merge(coverimg, template)
-    exportimg.save("exported-image.png", exif=coverimgexif)
+    exportimg = henosisaurus.write(input_image, ASCIIinput)
+    exportimg.save("exported-image.png", exif=input_image_exif)
 
 
 def decodeText(input_image, savekey):
     """Decodes text contained in image that was encoded using Steganosaurus."""
     
-    img, coverimg = henosisaurus.demerge(Image.open(input_image))
+    img, coverimg = henosisaurus.read(Image.open(input_image))
 
     # Pull the encoded pixels
     coded_text = [char for tup in list(img.getdata()) for char in tup]
@@ -86,7 +79,8 @@ def decodeText(input_image, savekey):
     with open("decoded-text.txt", "w") as textout:
         for i, x in enumerate(temp):
             decoded_text[x] = chr(coded_text[i])
-        textout.write("".join(decoded_text))
+        if decoded_text[0] is not None:
+            textout.write("".join(decoded_text))
 
     print("".join(decoded_text))
 
@@ -122,5 +116,5 @@ def process(filename, action):
         return decodeText(filename[0], filename[1])
 
 #main()
-#encodeText("Hello. This is a test to see how this actually looks encoded. A straight line is certainly easier to implement, but random positioning might look more like random (natural) noise, which is more difficult to detect.", "abCD$5")
+# encodeText("testOverlay1.png", "Hello. This is a test for a user-choice image input. 2.", "abCD$5")
 decodeText("exported-image.png", "abCD$5")
