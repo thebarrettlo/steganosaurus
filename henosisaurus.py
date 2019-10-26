@@ -7,17 +7,23 @@
 #
 
 from PIL import Image
-import piexif
-import piexif.helper
 
 
-def write(im1, ascii_list): # !!! FIX WHEN 0 CHANGE TO 255 ALPHA LAYER
-    """write() adds each separate digit of the transcibed text's ASCII values to an
-    R, G, B, or Alpha value of the cover image. Takes two Image objects. Returns the first
-    image (im1) object with the second image (im2) concealed within it."""
+def write(im1, ascii_list):
+    """
+    Adds each separate digit of the transcibed text's ASCII values to a Red, Green, or Blue value of the cover image.
+    Takes an image and a list of ASCII values. Returns the first image with the ASCII values concealed within it.
+
+    Args:
+        im1 (Image): Image object (from PIL) to be written on.
+        ascii_list (list): list of characters in ASCII value.
+
+    Returns:
+        mergedimage (Image): Image object (from PIL) with the text written into the image.
+
+    """
 
     im1.load()   # Cover image
-    # im2.load()   # Cipher text
 
     # Get pixel data from images
     coverrgba = [list(pix) for pix in list(im1.getdata())]
@@ -56,9 +62,17 @@ def write(im1, ascii_list): # !!! FIX WHEN 0 CHANGE TO 255 ALPHA LAYER
 
 
 def read(im):
-    """read() finds the difference between each separate digit of the transcibed text's ASCII values
-    to an R, G, B, or Alpha value of the cover image. Takes one Image object. Returns two image objects:
-    the coded image and the cover image."""
+    """
+        Finds the difference between each pixel (and their color channels) on the image and its original
+        value from the EXIF UserComment.
+
+        Args:
+            im (Image): Image object (from PIL) to be written on.
+
+        Returns:
+            mergedimage (Image): Image object (from PIL) with the text written into the image.
+
+        """
     
     # Get pixel data from images
     im.load()
@@ -79,11 +93,10 @@ def read(im):
             if j == 3:
                 j = 0
         i += 1
-    codedlist = _combinetorgbtuple(codedlist)
-    codedimg = Image.new("RGB", im.size)
-    codedimg.putdata(codedlist)
+    codedlist = _combine(codedlist)
 
-    return codedimg, im
+    return codedlist
+
 
 def _separatetorgb(vals):
     """_separatetorgb() takes a list of integer values and turns them into 4-value lists within a list."""
@@ -96,15 +109,27 @@ def _separatetorgb(vals):
 
     return out
 
-def _separatetorgba(vals):
-    """_listtorgbatuple() takes a list of integer values and turns them into 4-value lists within a list."""
+
+def _combine(vals):
+    """
+    Takes a list of integer values (single digits) and combines them in threes (leading zeroes are
+    counted but thrown out.
+
+    Args:
+        vals (List): list of single digits.
+
+    Returns:
+        out (List): list of more complete digits.
+
+    """
 
     i = 0
     out = []
     while i < len(vals):
-        out.append(vals[i:i+4])
-        i += 4
-    
+        curr = int("".join(map(str, vals[i:i + 3])))
+        out.append(curr)
+        i += 3
+
     return out
 
 
@@ -121,6 +146,3 @@ def _combinetorgbtuple(vals):
         i += 9
 
     return out
-
-#print(merge(Image.open("exportImageTEST.png"), Image.open("encodedImage.png")))
-#print(demerge(Image.open("exportImageTEST.png")))

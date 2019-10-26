@@ -5,6 +5,7 @@
 
 import math
 
+
 def generate_key(savekey):
     """Generates a key from the given save key. The save key must be between five and twenty characters, and may include
     uppercase, lowercase, numbers, and special characters."""
