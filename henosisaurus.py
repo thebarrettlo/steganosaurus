@@ -7,6 +7,12 @@
 #
 
 from PIL import Image
+from bitstring import BitArray, BitStream
+
+ONE_BYTE = 1
+TWO_BYTES = 2
+THREE_BYTES = 3
+FOUR_BYTES = 4
 
 def merge(im1, im2): # !!! FIX WHEN 0 CHANGE TO 255 ALPHA LAYER
     """Merge() adds each separate digit of the transcibed text's ASCII values to an
@@ -42,7 +48,7 @@ def merge(im1, im2): # !!! FIX WHEN 0 CHANGE TO 255 ALPHA LAYER
                 coverpixel += 1
                 pixelchannel = 0
         i += 1
-        
+
     i = 0
     for pix in coverrgba:   # Convert the cover image RGBA values back to tuples for image export
         coverrgba[i] = tuple(pix)
@@ -96,6 +102,8 @@ def _separatetorgba(vals):
 
 def _combinetorgbtuple(vals):
     """_combinetorgbtuple() takes a list of integer values (single digits) and turns them into 3-value tuples within a list."""
+    
+    vals = vals + [0] * (9 - (len(vals) % 9))  # Ensures that there will be a full tuple to post
 
     i = 0
     out = []
@@ -106,5 +114,27 @@ def _combinetorgbtuple(vals):
 
     return out
 
-#print(merge(Image.open("exportImageTEST.png"), Image.open("encodedImage.png")))
-#print(demerge(Image.open("exportImageTEST.png")))
+def check_num_bytes(utf_char: str) -> int:
+    """
+    Checks length of UTF-8 encoded character.
+        utf_char: Character encoded with UTF-8
+    Returns:
+        0 = not UTF-8 encoded
+        1 = 1 byte
+        2 = 2 bytes
+        3 = 3 bytes
+        4 = 4 bytes
+    """
+
+    mask = BitArray(utf_char.encode('utf-8')).bin
+
+    if mask[0] == '0':
+        return ONE_BYTE
+    elif mask[2] == '0':
+        return TWO_BYTES
+    elif mask[3] == '0':
+        return THREE_BYTES
+    elif mask[4] == '0':
+        return FOUR_BYTES
+    
+    return 0
