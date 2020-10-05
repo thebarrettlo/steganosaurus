@@ -1,7 +1,7 @@
 import unittest
 import steganosaurus
-from kruptosaurus import hash_pixel, encode_to_cluster
-from henosisaurus import check_num_bytes
+from kruptosaurus import hash_pixel
+from henosisaurus import check_num_bytes, encode_to_cluster
 import numpy as np
 
 ONE_BYTE_CHAR = 'a'  # Unicode U+0061
@@ -105,4 +105,3 @@ if __name__ == '__main__':
     runner.run(hash_suite())
     runner.run(check_num_bytes_suite())
     runner.run(encode_to_cluster_suite())
-    

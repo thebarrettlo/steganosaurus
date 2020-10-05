@@ -8,152 +8,89 @@
 
 from PIL import Image
 from bitstring import BitArray, BitStream
+from kruptosaurus import hash_pixel
 
 ONE_BYTE = 1
 TWO_BYTES = 2
 THREE_BYTES = 3
 FOUR_BYTES = 4
 
+RED = 0
+GREEN = 1
+BLUE = 2
+NUM_CHANNELS = 3
 
-def write(im1, ascii_list):
+def encode_to_cluster(char: str, ref_x: int, ref_y: int, pixelmap: list) -> int:
     """
-    Adds each separate digit of the transcibed text's ASCII values to a Red, Green, or Blue value of the cover image.
-    Takes an image and a list of ASCII values. Returns the first image with the ASCII values concealed within it.
+    Encodes char to a cluster of pixels, starting with the reference pixel
+    at (ref_x, ref_y). Red channel, green channel, then blue channel, are
+    encoded at bits 0 and 1 before moving to the next pixel (pixel to the
+    right (x+1) until x = ref_x+2 then next pixel is (ref_x, ref_y-1) up
+    one pixel and a new row of three.
+    
+    Returns:
+        The number of bits that the character took up, as an int
+    """
 
-    Args:
-        im1 (Image): Image object (from PIL) to be written on.
-        ascii_list (list): list of characters in ASCII value.
+    byte_len = check_num_bytes(char)
+    char_bits = BitArray(char.encode('utf-8')).bin
+    clear_mask = int('11111100', 2)
+    curr_x = ref_x
+    curr_y = ref_y
+    channel = RED   # Cycles between RED (0), GREEN (1), and BLUE (2)
+
+    for bindex in range(0, byte_len * 8, 2):
+        data_mask = int(char_bits[bindex:bindex+2], 2)
+        pixelmap[curr_y][curr_x][channel] &= clear_mask
+        pixelmap[curr_y][curr_x][channel] |= data_mask
+
+        channel += 1
+        if channel == BLUE + 1:
+            curr_x += 1
+            if curr_x == ref_x + 3:
+                curr_x = 0
+                curr_y -= 1
+            channel = RED
+
+    return byte_len * 8
+
+def find_next_open(ref_x: int, ref_y: int, pixelmap: list, occupied: set) -> (int, int):
+    """
+    Hashes the pixels at the current location (ref_x, ref_y) and creates
+    an offset to the next open location (not in occupied). Validates that
+    the new location has a 3x2 pixels space for a character cluster
 
     Returns:
-        mergedimage (Image): Image object (from PIL) with the text written into the image.
-
+        x and y coordinates of the next open location
     """
 
-    im1.load()   # Cover image
+    next_x = ref_x
+    next_y = ref_y
+    y_add = False   # False == subtract
+    x_add = True
+    img_height = pixelmap.shape[0]
+    img_width = pixelmap.shape[1]
 
-    # Get pixel data from images
-    coverrgba = [list(pix) for pix in list(im1.getdata())]
-    coverpixel = 0   # Counter for current pixel on cover image
-    pixelchannel = 0   # Counter for current channel of current pixel on cover image
-    i = 0   # Counter for current encipheredascii number
+    y_offset = (hash_pixel(pixelmap[ref_y][ref_x]) % img_height) + 2
+    x_offset = (hash_pixel(pixelmap[ref_y][ref_x + 1]) % img_width) + 2
+    if y_offset % 2 == 1:
+        y_offset = -(y_offset + 1)
+        y_add = not y_add
+    if x_offset % 2 == 1:
+        x_offset = -(x_offset + 1)
+        x_add = not x_add
 
-    for char in ascii_list:
-        curr = [int(a) for a in str(char)]
-        # Ensure all pixel values are three digits long; necessary for accurate decoding
-        if len(curr) == 1:
-            curr = [0, 0] + curr
-        elif len(curr) == 2:
-            curr = [0] + curr
-        for digit in curr:   # Add the next cipher text digit to the next cover image pixel channel
-            if digit == 0:
-                pixelchannel += 1
-            else:
-                if coverrgba[coverpixel][pixelchannel] < 247:   # Reduce noise in resulting encoded image
-                    coverrgba[coverpixel][pixelchannel] = (coverrgba[coverpixel][pixelchannel] + digit)
-                else:
-                    coverrgba[coverpixel][pixelchannel] = (coverrgba[coverpixel][pixelchannel] - digit)
-                pixelchannel += 1
-            if pixelchannel > 2:
-                coverpixel += 1
-                pixelchannel = 0
-        i += 1
+    while (next_x + x_offset, next_y + y_offset) in occupied:
+        if y_offset == img_height:
+            if x_offset == img_width:
+                break
+            x_offset += 2
+        else:
+            y_offset += 2
 
-    i = 0
-    for pix in coverrgba:   # Convert the cover image RGBA values back to tuples for image export
-        coverrgba[i] = tuple(pix)
-        i += 1
+    # Validate new coordinates have room for a cluster
 
-    mergedimage = Image.new("RGB", im1.size)
-    mergedimage.putdata(coverrgba)
-
-    return mergedimage
-
-
-def read(im):
-    """
-        Finds the difference between each pixel (and their color channels) on the image and its original
-        value from the EXIF UserComment.
-
-        Args:
-            im (Image): Image object (from PIL) to be written on.
-
-        Returns:
-            mergedimage (Image): Image object (from PIL) with the text written into the image.
-
-        """
-    
-    # Get pixel data from images
-    im.load()
-    imagepixels = [list(pix) for pix in list(im.getdata())]
-    image_exif = im.getexif()
-    user_comment = image_exif[37510]
-    usercomment_exif = _separatetorgb([int(a) for a in user_comment.split(",")])
-    codedlist = []
-    i = 0   # Counter for pixel channel pointer
-    j = 0   # Channel pointer counter
-    while i < len(usercomment_exif):
-        for channel in imagepixels[i]:
-            if usercomment_exif[i][j] < 247:
-                codedlist.append(channel - usercomment_exif[i][j])
-            else:
-                codedlist.append((usercomment_exif[i][j]) - channel)
-            j += 1
-            if j == 3:
-                j = 0
-        i += 1
-    codedlist = _combine(codedlist)
-
-    return codedlist
-
-
-def _separatetorgb(vals):
-    """_separatetorgb() takes a list of integer values and turns them into 4-value lists within a list."""
-
-    i = 0
-    out = []
-    while i < len(vals):
-        out.append(vals[i:i + 3])
-        i += 3
-
-    return out
-
-
-def _combine(vals):
-    """
-    Takes a list of integer values (single digits) and combines them in threes (leading zeroes are
-    counted but thrown out.
-
-    Args:
-        vals (List): list of single digits.
-
-    Returns:
-        out (List): list of more complete digits.
-
-    """
-
-    i = 0
-    out = []
-    while i < len(vals):
-        curr = int("".join(map(str, vals[i:i + 3])))
-        out.append(curr)
-        i += 3
-
-    return out
-
-
-def _combinetorgbtuple(vals):
-    """_combinetorgbtuple() takes a list of integer values (single digits) and turns them into 3-value tuples within a list."""
-    
-    vals = vals + [0] * (9 - (len(vals) % 9))  # Ensures that there will be a full tuple to post
-
-    i = 0
-    out = []
-    while i < len(vals):
-        curr = (int("".join(map(str, vals[i:i+3]))), int("".join(map(str, vals[i+3:i+6]))), int("".join(map(str, vals[i+6:i+9]))))
-        out.append(curr)
-        i += 9
-
-    return out
+    return next_x + x_offset, next_y + y_offset
 
 def check_num_bytes(utf_char: str) -> int:
     """
