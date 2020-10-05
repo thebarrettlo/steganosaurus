@@ -12,6 +12,7 @@ GREEN = 1
 BLUE = 2
 NUM_CHANNELS = 3
 
+
 def generate_key(savekey):
     """Generates a key from the given save key. The save key must be between five and twenty characters, and may include
     uppercase, lowercase, numbers, and special characters."""

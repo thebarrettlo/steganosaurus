@@ -13,69 +13,79 @@ import random
 from kruptosaurus import encode_to_cluster
 from bitstring import BitArray, BitStream
 
-def encodeText(input_text, savekey):
-    """Encodes user's text into an image file. Takes user's text and image to cover up the coded image."""
 
-    # Translate user input to ASCII values stored in a list
+def encode_text(imagePath, input_text, savekey):
+    """
+    Encodes user's text into an image file. The user defines their own save key for later message retrieval.
+
+    Args:
+        imagePath (str): filepath of the image to conceal the message within.
+        input_text (str): text to encode. The length is bound by the number of pixels in the supplied image.
+        savekey (str): a key to encrypt and decrypt the message. Can be any combination of letters, numbers,
+                        and special characters. Must be at least 5 (five) characters long.
+
+    Returns:
+        Nothing. However, encode_text() does create a new image, exported-image.png.
+
+    """
+
+    # 1. Translate user input to ASCII values stored in a list
     ASCIIinput = []
-    for char in input_text:
+    for char in input_text:  # Convert text into ASCII values
         ASCIIinput.append(ord(char))
-    key = kruptosaurus.generate_key(savekey)
-    random.seed(kruptosaurus.generate_key(key))   # User-generated save key for decoding
-    random.shuffle(ASCIIinput)
-    kruptosaurus.ASCIIshift(ASCIIinput, key)
+    key = kruptosaurus.generate_key(savekey)  # Generate a key based on the user's save key
+    random.seed(kruptosaurus.generate_key(key))  # Seed with the user-generated save key
+    random.shuffle(ASCIIinput)  # Shuffle in user's message based upon their save key
+    kruptosaurus.ASCIIshift(ASCIIinput, key)  # Shift the shuffled message
 
-    # Initialize blank image for encoding
-    tempcover = Image.open("./testOverlay.png")
-    tempcover.load()
-    coverimg = Image.new("RGBA", tempcover.size, (255,255,255,0))
-    coverimg.paste(tempcover)
-    coverimgexif = coverimg.getexif()   # Store original cover image data in Image Description metadata
+    # Get length of input and modify only that amount on the original picture
+    # (and therefore, save that amount from the original picture)
+
+    # 2. Load the input image
+    input_image = Image.open(imagePath)
+    input_image.load()
+    input_image_exif = input_image.getexif()
+
     imgdescription = []
-    for rgbtuple in list(coverimg.getdata()):
+    for rgbtuple in list(input_image.getdata()):
         imgdescription.append(str(rgbtuple).replace(" ", "").replace("(", "").replace(")", ""))
-    coverimgexif[270] = ",".join(imgdescription)
+    user_comment = ",".join(imgdescription[0:len(ASCIIinput)])
+    input_image_exif[37510] = user_comment
+    input_image_exif[42034] = 0  # Handles Lens Specification error - Pillow not able to save this data.
 
-    width = coverimg.width
-    height = coverimg.height
-    template = Image.new("RGB", (width, height))
+    # Handle case where x and y resolutions are tuples. Some images may not have this EXIF data existing, so
+    # Pillow will throw a Key Error.
+    try:
+        if input_image_exif[282] and input_image_exif[283]:
+            if len(input_image_exif[282]) > 1:
+                input_image_exif[282] = input_image_exif[282][0] / input_image_exif[282][1]
+            if len(input_image_exif[283]) > 1:
+                input_image_exif[283] = input_image_exif[283][0] / input_image_exif[283][1]
+    except:
+        KeyError("No EXIF data!")
 
-    # Change pixel colors
-    draw = ImageDraw.Draw(template)
-    x = 0
-    y = 0
-    i = 0
-    while i < (len(ASCIIinput) - (len(ASCIIinput) % 3)):
-        draw.point([(x, y)], (ASCIIinput[i], ASCIIinput[i+1], ASCIIinput[i+2]))
-        i += 3
-        x += 1
-        if x >= width:
-            x = 0
-            y += 1
-            if y >= height:
-                raise IndexError("Message too tall!")
-    # End case for inputs not a multiple of 3
-    if (len(ASCIIinput) % 3) == 1:
-        draw.point([(x, y)], (ASCIIinput[i], 0, 0))
-    elif (len(ASCIIinput) % 3) == 2:
-        draw.point([(x, y)], (ASCIIinput[i], ASCIIinput[i+1], 0))
-    
-    # Conceal the text into the cover image
-    exportimg = henosisaurus.merge(coverimg, template)
-    exportimg.save("exported-image.png", exif=coverimgexif)
+    exportimg = henosisaurus.write(input_image, ASCIIinput)  # Conceal the text into the cover image
+
+    exportimg.save("exported-image.png", exif=input_image_exif)
 
 
-def decodeText(input_image, savekey):
-    """Decodes text contained in image that was encoded using Steganosaurus."""
-    
-    img, coverimg = henosisaurus.demerge(Image.open(input_image))
+def decode_text(input_image, savekey):
+    """
+    Decodes text contained in image that was encoded using Steganosaurus. User supplies a save key that
+    will (potentially) retrieve the originally implanted message.
 
-    # Pull the encoded pixels
-    coded_text = [char for tup in list(img.getdata()) for char in tup]
-    i = 0
-    while coded_text[i] != 0:
-        i += 1
-    coded_text = coded_text[:i]
+    Args:
+        input_image (str): filepath of the image (potentially) with a concealed message.
+        savekey (str): a key to encrypt and decrypt the message. Can be any combination of letters, numbers,
+                        and special characters. Must be at least 5 (five) characters long.
+
+    Returns:
+        Nothing. However, a text file, decoded-text.txt, is created/written into containing the decoded
+        text (if any exists within the supplied image).
+
+    """
+
+    coded_text = henosisaurus.read(Image.open(input_image))
 
     # Decode using save key
     temp = list(range(len(coded_text)))
@@ -87,7 +97,8 @@ def decodeText(input_image, savekey):
     with open("decoded-text.txt", "w") as textout:
         for i, x in enumerate(temp):
             decoded_text[x] = chr(coded_text[i])
-        textout.write("".join(decoded_text))
+        if decoded_text[0] is not None:
+            textout.write("".join(decoded_text))
 
     print("".join(decoded_text))
 

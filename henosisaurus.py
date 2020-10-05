@@ -14,22 +14,31 @@ TWO_BYTES = 2
 THREE_BYTES = 3
 FOUR_BYTES = 4
 
-def merge(im1, im2): # !!! FIX WHEN 0 CHANGE TO 255 ALPHA LAYER
-    """Merge() adds each separate digit of the transcibed text's ASCII values to an
-    R, G, B, or Alpha value of the cover image. Takes two Image objects. Returns the first
-    image (im1) object with the second image (im2) concealed within it."""
+
+def write(im1, ascii_list):
+    """
+    Adds each separate digit of the transcibed text's ASCII values to a Red, Green, or Blue value of the cover image.
+    Takes an image and a list of ASCII values. Returns the first image with the ASCII values concealed within it.
+
+    Args:
+        im1 (Image): Image object (from PIL) to be written on.
+        ascii_list (list): list of characters in ASCII value.
+
+    Returns:
+        mergedimage (Image): Image object (from PIL) with the text written into the image.
+
+    """
 
     im1.load()   # Cover image
-    im2.load()   # Cipher text
 
     # Get pixel data from images
     coverrgba = [list(pix) for pix in list(im1.getdata())]
-    encipheredascii = [char for tup in list(im2.getdata()) for char in tup]
     coverpixel = 0   # Counter for current pixel on cover image
     pixelchannel = 0   # Counter for current channel of current pixel on cover image
     i = 0   # Counter for current encipheredascii number
-    while encipheredascii[i] > 0:
-        curr = [int(a) for a in str(encipheredascii[i])]
+
+    for char in ascii_list:
+        curr = [int(a) for a in str(char)]
         # Ensure all pixel values are three digits long; necessary for accurate decoding
         if len(curr) == 1:
             curr = [0, 0] + curr
@@ -43,8 +52,8 @@ def merge(im1, im2): # !!! FIX WHEN 0 CHANGE TO 255 ALPHA LAYER
                     coverrgba[coverpixel][pixelchannel] = (coverrgba[coverpixel][pixelchannel] + digit)
                 else:
                     coverrgba[coverpixel][pixelchannel] = (coverrgba[coverpixel][pixelchannel] - digit)
-                pixelchannel +=1
-            if pixelchannel > 3:
+                pixelchannel += 1
+            if pixelchannel > 2:
                 coverpixel += 1
                 pixelchannel = 0
         i += 1
@@ -54,49 +63,81 @@ def merge(im1, im2): # !!! FIX WHEN 0 CHANGE TO 255 ALPHA LAYER
         coverrgba[i] = tuple(pix)
         i += 1
 
-    mergedimage = Image.new("RGBA", im1.size)
+    mergedimage = Image.new("RGB", im1.size)
     mergedimage.putdata(coverrgba)
 
     return mergedimage
 
 
-def demerge(im):
-    """Demerge() finds the difference between each separate digit of the transcibed text's ASCII values
-    to an R, G, B, or Alpha value of the cover image. Takes one Image object. Returns two image objects:
-    the coded image and the cover image."""
+def read(im):
+    """
+        Finds the difference between each pixel (and their color channels) on the image and its original
+        value from the EXIF UserComment.
+
+        Args:
+            im (Image): Image object (from PIL) to be written on.
+
+        Returns:
+            mergedimage (Image): Image object (from PIL) with the text written into the image.
+
+        """
     
     # Get pixel data from images
     im.load()
-    coverrgba = [list(pix) for pix in list(im.getdata())]
-    imgexif = _separatetorgba([int(a) for a in str(im.getexif()[270]).split(",")])
+    imagepixels = [list(pix) for pix in list(im.getdata())]
+    image_exif = im.getexif()
+    user_comment = image_exif[37510]
+    usercomment_exif = _separatetorgb([int(a) for a in user_comment.split(",")])
     codedlist = []
     i = 0   # Counter for pixel channel pointer
     j = 0   # Channel pointer counter
-    while coverrgba[i] != imgexif[i]:
-        for channel in coverrgba[i]:
-            if imgexif[i][j] < 247:
-                codedlist.append(channel - imgexif[i][j])
+    while i < len(usercomment_exif):
+        for channel in imagepixels[i]:
+            if usercomment_exif[i][j] < 247:
+                codedlist.append(channel - usercomment_exif[i][j])
             else:
-                codedlist.append((imgexif[i][j]) - channel)
+                codedlist.append((usercomment_exif[i][j]) - channel)
             j += 1
-            if j == 4:
+            if j == 3:
                 j = 0
         i += 1
-    codedlist = _combinetorgbtuple(codedlist)
-    codedimg = Image.new("RGB", im.size)
-    codedimg.putdata(codedlist)
+    codedlist = _combine(codedlist)
 
-    return codedimg, im
+    return codedlist
 
-def _separatetorgba(vals):
-    """_listtorgbatuple() takes a list of integer values and turns them into 4-value lists within a list."""
+
+def _separatetorgb(vals):
+    """_separatetorgb() takes a list of integer values and turns them into 4-value lists within a list."""
 
     i = 0
     out = []
     while i < len(vals):
-        out.append(vals[i:i+4])
-        i += 4
-    
+        out.append(vals[i:i + 3])
+        i += 3
+
+    return out
+
+
+def _combine(vals):
+    """
+    Takes a list of integer values (single digits) and combines them in threes (leading zeroes are
+    counted but thrown out.
+
+    Args:
+        vals (List): list of single digits.
+
+    Returns:
+        out (List): list of more complete digits.
+
+    """
+
+    i = 0
+    out = []
+    while i < len(vals):
+        curr = int("".join(map(str, vals[i:i + 3])))
+        out.append(curr)
+        i += 3
+
     return out
 
 

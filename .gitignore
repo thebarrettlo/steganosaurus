@@ -6,3 +6,4 @@ War_and_Peace.txt
 *.pyc
 *.txt
 .vscode/
+.idea/
