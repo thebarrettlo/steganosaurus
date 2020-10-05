@@ -8,9 +8,10 @@ import sys
 import argparse
 from PIL import Image, ImageDraw, ImageChops
 from PIL.ExifTags import TAGS
+import numpy as np
 import random
-import kruptosaurus
-import henosisaurus
+from kruptosaurus import encode_to_cluster
+from bitstring import BitArray, BitStream
 
 def encodeText(input_text, savekey):
     """Encodes user's text into an image file. Takes user's text and image to cover up the coded image."""
@@ -121,5 +122,8 @@ def process(filename, action):
     elif action == '--decode':
         return decodeText(filename[0], filename[1])
 
-#main()
-decodeText("exported-image.png", "909op")
+class SteganoImage:
+
+    def __init__(self, fp: str):
+        self.fp = fp
+        self.pixelmap = np.array(Image.open(fp))

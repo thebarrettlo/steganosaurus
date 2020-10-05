@@ -138,3 +138,10 @@ def check_num_bytes(utf_char: str) -> int:
         return FOUR_BYTES
     
     return 0
+
+# test = BitArray('a'.encode('utf-8')).bin
+# print(test)
+# print(int(test[1:3], 2))
+# mask_template = int('11111100', 2)
+# mask = int(test[0:2], 2) | mask_template
+# print(BitArray(uint=mask, length=8).bin)
