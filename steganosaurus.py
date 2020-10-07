@@ -8,18 +8,9 @@ import sys
 import os
 import argparse
 from PIL import Image, UnidentifiedImageError
-import numpy as np
-import random
-from bitstring import BitArray, BitStream
 
-class SteganoImage:
-
-    def __init__(self, fp: str):
-        self.fp = fp
-        self.pixelmap = np.array(Image.open(fp))
-
-    def close_fp(self):
-        Image.close(self.fp)
+from henosisaurus import SteganoImage, encode_to_cluster, find_next_open
+from kruptosaurus import hash_pixel
 
 def encode_text(text_fp: str, img_fp: str, result_fp: str, key: str) -> str:
     """
@@ -43,13 +34,31 @@ def encode_text(text_fp: str, img_fp: str, result_fp: str, key: str) -> str:
     except Exception as e:
         print(e)
 
-    if os.path.getsize(text_fp) == 0:
-        # Create copy of image and let save at result_fp
-        return result_fp
+    if len(key) < 8:   # Additional key validation is needed
+        print("Key must be at least 8 characters long, no spaces.")
 
-    img = SteganoImage(img_fp)
+    try:
+        with open(text_fp, "r", -1, "utf-8") as text_file:
 
-    img.close_fp()   # Important to clean up open files
+            img = SteganoImage(img_fp, key)
+            ref_x = 0
+            ref_y = 0
+
+            buffer = text_file.read(1)
+            while buffer != '':
+                encode_to_cluster(buffer, ref_x, ref_y, img.pixelmap)
+                img.occupied.add((ref_x, ref_y))
+                ref_x, ref_y = find_next_open(ref_x, ref_y, img)
+                buffer = text_file.read(1)
+
+            encoded_img = Image.fromarray(img.pixelmap)
+            encoded_img.save(result_fp)
+
+            img.close_fp()   # Important to clean up open files
+
+    except (OSError):
+        print("Specified text file cannot be accessed.")
+
     return result_fp
 
 def main():
@@ -80,3 +89,5 @@ def process(filename, action):
         return encode_text(" ".join(filename[0:-1]), filename[-1])
     elif action == '--decode':
         return decode_text(filename[0], filename[1])
+
+encode_text('./hipster-lorem-latin.txt', './testOverlay.jpg', './v2output.jpg', 'testingtesting')

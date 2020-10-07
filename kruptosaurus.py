@@ -21,7 +21,7 @@ def generate_key(savekey):
 
     return keyval
 
-def hash_pixel(pixel: list) -> int:
+def hash_pixel(pixel: list, key: int) -> int:
     """Uses mid-square method to generate an int from 0-9999"""
 
     hash_int = 17
@@ -37,16 +37,17 @@ def hash_pixel(pixel: list) -> int:
             i = i << 4
         channels_total *= i
 
+    channels_total += key
     channels_total %= 9999  # Restrict to four digits
     return ((channels_total**2) // 100) % 10000    # Get middle four digits
 
-pixel = [24, 66, 204]
-print(hash_pixel(pixel))
-pixel = [25, 66, 204]
-print(hash_pixel(pixel))
-pixel = [25, 68, 204]
-print(hash_pixel(pixel))
-pixel = [224, 33, 170]
-print(hash_pixel(pixel))
-pixel = [1, 0, 3]
-print(hash_pixel(pixel))
+# pixel = [24, 66, 204]
+# print(hash_pixel(pixel))
+# pixel = [25, 66, 204]
+# print(hash_pixel(pixel))
+# pixel = [25, 68, 204]
+# print(hash_pixel(pixel))
+# pixel = [224, 33, 170]
+# print(hash_pixel(pixel))
+# pixel = [1, 0, 3]
+# print(hash_pixel(pixel))

@@ -1,7 +1,7 @@
 import unittest
-import steganosaurus
+from steganosaurus import SteganoImage
 from kruptosaurus import hash_pixel
-from henosisaurus import check_num_bytes, encode_to_cluster
+from henosisaurus import check_num_bytes, encode_to_cluster, find_next_open
 import numpy as np
 
 ONE_BYTE_CHAR = 'a'  # Unicode U+0061
@@ -78,6 +78,29 @@ class EncodeClusterTests(unittest.TestCase):
         self.assertEqual(expected, result)
 
 
+class FindOpenSpaceTests(unittest.TestCase):
+
+    def setUp(self):
+        self.img = SteganoImage('./16x16_dot.jpg')
+
+    def test_middle_empty(self):
+        result = find_next_open(8, 8, self.img)
+        self.assertEqual((8, 14), result)
+
+    def test_origin_empty(self):
+        result = find_next_open(0, 0, self.img)
+        self.assertEqual((12, 10), result)
+        
+    def test_origin_full(self):
+        for x in range(0, 15, 3):
+            for y in range(0, 15, 2):
+                self.img.occupied.add((x, y))
+        with self.assertRaises(IndexError):
+            find_next_open(0, 0, self.img)
+
+    def tearDown(self):
+        self.img.close_fp()
+
 def hash_suite():
     suite = unittest.TestSuite()
     suite.addTest(HashTests('test_hash'))
@@ -100,8 +123,16 @@ def encode_to_cluster_suite():
     suite.addTest(EncodeClusterTests('test_encode_cluster_04'))
     return suite
 
+def find_next_open_suite():
+    suite = unittest.TestSuite()
+    suite.addTest(FindOpenSpaceTests('test_middle_empty'))
+    suite.addTest(FindOpenSpaceTests('test_origin_empty'))
+    suite.addTest(FindOpenSpaceTests('test_origin_full'))
+    return suite
+
 if __name__ == '__main__':
     runner = unittest.TextTestRunner()
-    runner.run(hash_suite())
-    runner.run(check_num_bytes_suite())
-    runner.run(encode_to_cluster_suite())
+    runner.run(hash_suite())   # 2
+    runner.run(check_num_bytes_suite())   # 4
+    runner.run(encode_to_cluster_suite())   # 4
+    runner.run(find_next_open_suite())   # 3
