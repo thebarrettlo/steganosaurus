@@ -6,7 +6,8 @@
 
 import sys
 import argparse
-from henosisaurus import validate_input, encode_text
+from PIL import Image, UnidentifiedImageError
+from henosisaurus import encode_text
 
 def main(text_fp: str, img_fp: str, result_fp: str, key: str):
     
@@ -14,6 +15,33 @@ def main(text_fp: str, img_fp: str, result_fp: str, key: str):
         return 1
 
     return encode_text(text_fp, img_fp, result_fp, key)
+
+def validate_input(img_fp: str, key: str) -> bool:
+    """
+    Validates input parameters.
+    
+    Returns:
+        True if all inputs are valid, false otherwise.
+    
+    To be implemented:
+        - Validtion of result_fp as graphic file format
+    """
+
+    valid = False
+
+    try:
+        with Image.open(img_fp) as og_img:
+            valid = True
+    except (FileNotFoundError, UnidentifiedImageError):
+        print("Specified image cannot be found or opened.")
+    except Exception as e:
+        print(e)
+
+    if len(key) < 8:   # Additional key validation is needed
+        print("Key must be at least 8 characters long, no spaces.")
+        valid = False
+
+    return valid 
 
 
 # def main():
@@ -46,4 +74,4 @@ def main(text_fp: str, img_fp: str, result_fp: str, key: str):
 #         return decode_text(filename[0], filename[1])
 
 
-main('./hipster-lorem-latin.txt', './testOverlay.jpg', './v2output.png', 'testingtesting')
+# main('./hipster-lorem-latin.txt', './testOverlay.jpg', './v2output.png', 'testingtesting')

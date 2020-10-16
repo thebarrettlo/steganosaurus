@@ -18,7 +18,6 @@ TWO_BYTES = 2
 THREE_BYTES = 3
 FOUR_BYTES = 4
 
-
 class SteganoImage:
 
     def __init__(self, fp: str, key: str):
@@ -39,34 +38,7 @@ class Buffer():
     def __init__(self):
         self.buffer = 0
         self.bit_pos = 0
-
-
-def validate_input(img_fp: str, key: str) -> bool:
-    """
-    Validates input parameters.
-    
-    Returns:
-        True if all inputs are valid, false otherwise.
-    
-    To be implemented:
-        - Validtion of result_fp as graphic file format
-    """
-
-    valid = False
-
-    try:
-        with Image.open(img_fp) as og_img:
-            valid = True
-    except (FileNotFoundError, UnidentifiedImageError):
-        print("Specified image cannot be found or opened.")
-    except Exception as e:
-        print(e)
-
-    if len(key) < 8:   # Additional key validation is needed
-        print("Key must be at least 8 characters long, no spaces.")
-        valid = False
-
-    return valid        
+       
 
 def encode_text(text_fp: str, img_fp: str, result_fp: str, key: str) -> int:
     """
