@@ -6,23 +6,18 @@
 # 25 May, 2019
 #
 
+import os
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
+import piexif
+from typing import TextIO
 from bitstring import BitArray, BitStream
-from kruptosaurus import hash_pixel
 
 ONE_BYTE = 1
 TWO_BYTES = 2
 THREE_BYTES = 3
 FOUR_BYTES = 4
 
-RED = 0
-GREEN = 1
-BLUE = 2
-NUM_CHANNELS = 3
-
-NEG = -1
-POS = 1
 
 class SteganoImage:
 
@@ -31,129 +26,154 @@ class SteganoImage:
         self.pillow_img = Image.open(fp)
         self.pixelmap = np.array(self.pillow_img)
         self.occupied = set()
-        self.key = 0
-        for char in key:
-            self.key += ord(char)
+        self.key = key
+        # for char in key:
+        #     self.key += ord(char)
 
     def close_fp(self):
         self.pillow_img.close()
 
-def encode_to_cluster(char: str, ref_x: int, ref_y: int, pixelmap: list) -> int:
+
+class Buffer():
+    
+    def __init__(self):
+        self.buffer = 0
+        self.bit_pos = 0
+
+
+def validate_input(img_fp: str, key: str) -> bool:
     """
-    Encodes char to a cluster of pixels, starting with the reference pixel
-    at (ref_x, ref_y). Red channel, green channel, then blue channel, are
-    encoded at bits 0 and 1 before moving to the next pixel (pixel to the
-    right (x+1) until x = ref_x+2 then next pixel is (ref_x, ref_y-1) up
-    one pixel and a new row of three.
+    Validates input parameters.
     
     Returns:
-        The number of bits that the character took up, as an int
+        True if all inputs are valid, false otherwise.
+    
+    To be implemented:
+        - Validtion of result_fp as graphic file format
     """
 
-    byte_len = check_num_bytes(char)
-    char_bits = BitArray(char.encode('utf-8')).bin
+    valid = False
+
+    try:
+        with Image.open(img_fp) as og_img:
+            valid = True
+    except (FileNotFoundError, UnidentifiedImageError):
+        print("Specified image cannot be found or opened.")
+    except Exception as e:
+        print(e)
+
+    if len(key) < 8:   # Additional key validation is needed
+        print("Key must be at least 8 characters long, no spaces.")
+        valid = False
+
+    return valid        
+
+def encode_text(text_fp: str, img_fp: str, result_fp: str, key: str) -> int:
+    """
+    Main process for encoding text (UTF-8 encoded) from a file into
+    an 8-bit, three-color image. Creates a SteganoImage() instance
+    for managing the pixel data.
+
+    Returns:
+        A copy of the given image with the given message hidden
+        within, at result_fp. If the text file is empty, returns
+        the given image unaltered.
+    """
+
+    try:
+        with open(text_fp, "r", encoding="utf-8") as text_file:
+
+            img = SteganoImage(img_fp, key)
+            ref_table = generate_reference_array(img)
+            buffer = Buffer()
+            curr_pixel = 0
+            pixel_max = len(ref_table)
+
+            fill_buffer(buffer, text_file)
+            while buffer.bit_pos > 0:
+                encode_pixel(img, buffer, ref_table[curr_pixel])
+                curr_pixel += 1
+
+                if curr_pixel == pixel_max:
+                    print("Max amount of characters encoded. Please provide a larger image for more characters.")
+                    break
+
+                if buffer.bit_pos < 6:
+                    fill_buffer(buffer, text_file)
+
+            encoded_img = Image.fromarray(img.pixelmap)
+            encoded_img.save(result_fp)
+
+            if img.pillow_img.format == "JPEG" or img.pillow_img.format == "TIFF":
+                try:
+                    piexif.transplant(img_fp, result_fp)
+                except ValueError:
+                    pass
+
+            img.close_fp()   # Important to clean up open files
+    except (OSError):
+        print("Specified text file cannot be accessed.")
+        return 1
+
+    return 0
+
+def fill_buffer(buffer: Buffer, text_file: TextIO) -> int:
+    """
+    Gets a character from the text file and puts it into the buffer. buffer should
+    be at least a 32 bit int.
+
+    Returns:
+        0 on success, 1 if fail.
+    """
+
+    next_char = text_file.read(1)
+    if next_char == '':
+        return 1
+
+    num_bits = check_num_bytes(next_char) * 8
+
+    buffer.buffer = buffer.buffer << (num_bits)
+    buffer.buffer |= ord(next_char)
+
+    buffer.bit_pos += (num_bits - 1)
+
+    return 0
+
+def encode_pixel(img: SteganoImage, buffer: Buffer, curr_pixel: int) -> int:
+    """
+    Encodes six bits from the buffer into a pixel (2 bits per channel). The
+    buffer is adjusted within this function.
+
+    Returns:
+        0 on success, 1 if failure writing from buffer.
+    """
+    # Can't I use BitArray for all of this? Isn't that the point...?
+    y = curr_pixel // (img.pixelmap.shape[0])
+    x = curr_pixel % (img.pixelmap.shape[1] - 1)
     clear_mask = int('11111100', 2)
-    curr_x = ref_x
-    curr_y = ref_y
-    channel = RED   # Cycles between RED (0), GREEN (1), and BLUE (2)
-
-    for bindex in range(0, byte_len * 8, 2):
-        data_mask = int(char_bits[bindex:bindex+2], 2)
-        pixelmap[curr_y][curr_x][channel] &= clear_mask
-        pixelmap[curr_y][curr_x][channel] |= data_mask
-
-        channel += 1
-        if channel == BLUE + 1:
-            curr_x += 1
-            if curr_x == ref_x + 3:
-                curr_x = 0
-                curr_y -= 1
-            channel = RED
-
-    return byte_len * 8
-
-def find_next_open(ref_x: int, ref_y: int, img: SteganoImage) -> (int, int):
-    """
-    Hashes the pixels at the current location (ref_x, ref_y) and creates
-    an offset to the next open location (not in occupied). Validates that
-    the new location has a 3x2 pixels space for a character cluster
-
-    Returns:
-        x and y coordinates of the next open location
-    """
-
-    next_x = ref_x
-    x_sign = y_sign = POS
-    img_height = img.pixelmap.shape[0]
-    img_width = img.pixelmap.shape[1]
-    x_boundary = 0
-
-    y_offset = (hash_pixel(img.pixelmap[ref_y][ref_x], img.key) % img_height)
-    x_offset = (hash_pixel(img.pixelmap[ref_y][ref_x + 1], img.key) % img_width)
-    if y_offset % 2 == 1:
-        y_offset = -(y_offset + 1)
-        y_sign = NEG
-    if x_offset % 3 == 2:
-        x_offset = -(x_offset + 1)
-        x_sign = NEG
-    elif x_offset % 3 == 1:
-        x_offset += 2
-
-    # print("y_offset: " + str(y_offset))
-    # print("x_offset: " + str(x_offset))
-
-    if ref_y + y_offset < 0:
-        y_offset = -ref_y
-    elif ref_y + y_offset >= img_height - 1:
-        y_offset = img_height - ref_y - 2 - (img_height % 2)
-    next_y = ref_y + y_offset
-    if ref_x + x_offset < 0:
-        x_offset = -ref_x
-    elif ref_x + x_offset >= img_width - ref_x - 4:
-        x_offset = img_width - ref_x - 5 - (img_width % 3)
-    next_x = ref_x + x_offset
+    curr_shift = buffer.bit_pos
+    bit_mask = int('11', 2) << curr_shift
     
-    # print("next_y: " + str(next_y) + " " + str(y_sign))
-    # print("next_x: " + str(next_x) + " " + str(x_sign))
+    if buffer.bit_pos > 4:
+        num_channels = 3
+    elif buffer.bit_pos > 2:
+        num_channels = 2
+    else:
+        num_channels = 1
 
-    while True:
-        next_y = _find_open_y(next_x, ref_y, y_offset, y_sign, img)
-        if next_y == ref_y:
-            next_x = next_x + 3 * x_sign
-            if next_x < 0 or img_width - 1 - next_x < 3:
-                x_boundary += 1
-                x_sign = -x_sign
-                next_x = ref_x + x_offset + 3 * x_sign
-                # print("Hit x boundary")
-            if x_boundary == 2:
-                print(ref_x)
-                print(ref_y)
-                print(len(img.occupied))
-                raise IndexError("No open space!")
-        else:
-            break
+    for channel in range(num_channels):
+        data_mask = (bit_mask & buffer.buffer) >> curr_shift
+        buffer.buffer |= ~bit_mask   # Clear bits in buffer
 
-    return next_x, next_y
+        img.pixelmap[y][x][channel] &= clear_mask
+        img.pixelmap[y][x][channel] |= data_mask
 
-def _find_open_y(next_x: int, ref_y: int, y_offset: int, y_sign: int, img: SteganoImage):
+        curr_shift -= 2
+        bit_mask = bit_mask >> 2
+
+    buffer.bit_pos -= 2 * num_channels
     
-    next_y = ref_y + y_offset
-    img_height = img.pixelmap.shape[0]
-    y_boundary = 0
-
-    # Try one y-direction first
-    while ((next_x, next_y) in img.occupied):
-        next_y = next_y + 2 * y_sign
-        if next_y < 0 or next_y >= img_height:
-            y_boundary += 1
-            y_sign = -y_sign
-            next_y = ref_y + y_offset + 2 * y_sign
-            # print("Hit y boundary")
-        if y_boundary == 2:
-            # print("No open y in second direction")
-            return ref_y
-
-    return next_y
+    return 0
 
 def check_num_bytes(utf_char: str) -> int:
     """
@@ -180,20 +200,42 @@ def check_num_bytes(utf_char: str) -> int:
     
     return 0
 
-# img = SteganoImage('./16x16_dot.jpg')
-# for x in range(0, 15, 3):
-#     for y in range(0, 15, 2):
-#         img.occupied.add((x, y))
-# img.occupied.add((1, 2))
-# img.occupied.add((1, 4))
-# img.occupied.add((1, 6))
-# img.occupied.add((1, 8))
-# img.occupied.add((8, 8))
-# img.occupied.add((1, 10))
-# img.occupied.add((1, 12))
-# img.occupied.add((1, 14))
-# img.occupied.add((2, 8))
-# img.occupied.add((5, 8))
-# img.occupied.add((11, 8))
-# img.occupied.add((14, 8))
-# print(find_next_open(0, 0, img))
+def generate_reference_array(img: SteganoImage) -> np.ndarray:
+    """
+    Generates a 1-dimensional array with values corresponding to locations (indices) of
+    pixels on the original image. Values are shuffled to be referenced when
+    encoding or decoding text onto image.
+
+    Returns:
+        An ndarray with shuffled random numbers from [0, w x h]
+    """
+
+    height = img.pixelmap.shape[0]
+    width = img.pixelmap.shape[1]
+
+    ref_table = np.arange(0, height * width, 1, int)
+    shuffler = np.random.default_rng([ord(char) for char in img.key])
+    shuffler.shuffle(ref_table, axis=0)
+
+    return ref_table
+
+def generate_reference_table(img: SteganoImage) -> np.ndarray:
+    """
+    Generates a table with values corresponding to locations (indices) of
+    pixels on the original image. Values are shuffled to be referenced when
+    encoding or decoding text onto image.
+
+    Returns:
+        An ndarray with a width and height of img.
+    """
+
+    height = img.pixelmap.shape[0]
+    width = img.pixelmap.shape[1]
+
+    ref_table = np.arange(0, height * width, 1, int).reshape(height, width)
+    shuffler = np.random.default_rng([ord(char) for char in img.key])
+    
+    shuffler.shuffle(ref_table, axis=0)
+    shuffler.shuffle(ref_table, axis=1)
+
+    return ref_table
